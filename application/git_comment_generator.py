@@ -74,7 +74,7 @@ def main():
     2. 修复了何种bug
     3. 优化了何种性能
     
-    请根据以下给定的git差异内容生成3条提交信息，可以参考用户的提示\"{user_prompt}\"：
+    请根据以下给定的git差异内容生成几条提交信息，可以参考用户的提示\"{user_prompt}\"：
     ```{input_data}```
     """
     # print('[DEBUG] prompt: ', prompt)
