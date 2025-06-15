@@ -16,6 +16,7 @@ from contextlib import nullcontext
 from transformers import AutoTokenizer
 from model.model_minimind import MiniMindConfig, MiniMindForCausalLM
 from dataset.lm_dataset import PretrainDataset
+from datetime import datetime
 
 warnings.filterwarnings('ignore')
 
@@ -23,6 +24,9 @@ warnings.filterwarnings('ignore')
 def Logger(content):
     if not ddp or dist.get_rank() == 0:
         print(content)
+        with open(args.log_file, 'a+') as f:
+            formatted_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+            f.write('[' + formatted_time + '] ' + content + '\n')
 
 
 def get_lr(current_step, total_steps, lr):
@@ -97,6 +101,10 @@ def train_epoch(epoch, wandb):
 def init_model(lm_config):
     tokenizer = AutoTokenizer.from_pretrained('../model/')
     model = MiniMindForCausalLM(lm_config).to(args.device)
+    if args.from_checkpoint:
+        model.load_state_dict(torch.load(args.from_checkpoint))
+        model.to(args.device)
+        Logger(f"Load checkpoint from {args.from_checkpoint}")
     Logger(f'LLM可训练总参数量：{sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6:.3f} 百万')
     return model, tokenizer
 
@@ -139,8 +147,9 @@ if __name__ == "__main__":
     parser.add_argument('--max_seq_len', default=512, type=int)
     parser.add_argument('--use_moe', default=False, type=bool)
     parser.add_argument("--data_path", type=str, default="../dataset/pretrain_hq.jsonl")
+    parser.add_argument("--from_checkpoint", type=str, default=None)
+    parser.add_argument("--log_file", type=str, default="../out/train_pretrain.log")
     args = parser.parse_args()
-    print("[DEBUG] 目前使用的训练设备为", args.device)
 
     lm_config = MiniMindConfig(hidden_size=args.hidden_size, num_hidden_layers=args.num_hidden_layers, use_moe=args.use_moe)
     args.save_dir = os.path.join(args.out_dir)
@@ -196,6 +205,8 @@ if __name__ == "__main__":
     if ddp:
         model._ddp_params_and_buffers_to_ignore = {"pos_cis"}
         model = DistributedDataParallel(model, device_ids=[ddp_local_rank])
+
+    Logger("[DEBUG] 目前使用的训练设备为" + args.device)
 
     iter_per_epoch = len(train_loader)
     for epoch in range(args.epochs):
