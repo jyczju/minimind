@@ -17,6 +17,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from model.model_minimind import MiniMindConfig, MiniMindForCausalLM
 from dataset.lm_dataset import SFTDataset
 from model.model_lora import load_lora, save_lora, apply_lora
+from datetime import datetime
 
 warnings.filterwarnings('ignore')
 
@@ -25,6 +26,9 @@ warnings.filterwarnings('ignore')
 def Logger(content):
     if not ddp or dist.get_rank() == 0:
         print(content)
+        with open(args.log_file, 'a+') as f:
+            formatted_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+            f.write('[' + formatted_time + '] ' + content + '\n')
 
 
 def get_lr(current_step, total_steps, lr):
@@ -118,7 +122,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
-    parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--device", type=str, default='cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
     parser.add_argument("--dtype", type=str, default="bfloat16")
     parser.add_argument("--use_wandb", action="store_true")
     parser.add_argument("--wandb_project", type=str, default="MiniMind-LoRA-SFT")
@@ -136,6 +140,7 @@ if __name__ == "__main__":
     parser.add_argument('--use_moe', default=False, type=bool)
     parser.add_argument("--data_path", type=str, default="../dataset/lora_medical.jsonl")
     parser.add_argument("--lora_name", type=str, default="lora_medical", help="根据任务保存成lora_(英文/医学/心理...)")
+    parser.add_argument("--log_file", type=str, default="../out/train_lora.log")
     args = parser.parse_args()
 
     lm_config = MiniMindConfig(hidden_size=args.hidden_size, num_hidden_layers=args.num_hidden_layers,
@@ -144,7 +149,8 @@ if __name__ == "__main__":
     os.makedirs(args.save_dir, exist_ok=True)
     os.makedirs(args.out_dir, exist_ok=True)
     tokens_per_iter = args.batch_size * args.max_seq_len
-    device_type = "cuda" if "cuda" in args.device else "cpu"
+    # device_type = "cuda" if "cuda" in args.device else "cpu"
+    device_type = args.device
 
     ctx = nullcontext() if device_type == "cpu" else torch.cuda.amp.autocast()
     ddp = int(os.environ.get("RANK", -1)) != -1  # is this a ddp run?
@@ -200,6 +206,8 @@ if __name__ == "__main__":
         num_workers=args.num_workers,
         sampler=train_sampler
     )
+
+    Logger("[DEBUG] 目前使用的训练设备为" + args.device)
 
     scaler = torch.cuda.amp.GradScaler(enabled=(args.dtype in ['float16', 'bfloat16']))
     iter_per_epoch = len(train_loader)
