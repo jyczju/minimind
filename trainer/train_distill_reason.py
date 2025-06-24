@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from model.model_minimind import MiniMindConfig, MiniMindForCausalLM
 from dataset.lm_dataset import SFTDataset
+from datetime import datetime
 
 warnings.filterwarnings('ignore')
 
@@ -24,6 +25,9 @@ warnings.filterwarnings('ignore')
 def Logger(content):
     if not ddp or dist.get_rank() == 0:
         print(content)
+        with open(args.log_file, 'a+') as f:
+            formatted_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+            f.write('[' + formatted_time + '] ' + content + '\n')
 
 
 def get_lr(current_step, total_steps, lr):
@@ -138,7 +142,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--learning_rate", type=float, default=1e-6)
-    parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--device", type=str, default='cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
     parser.add_argument("--dtype", type=str, default="bfloat16")
     parser.add_argument("--use_wandb", action="store_true")
     parser.add_argument("--wandb_project", type=str, default="MiniMind-Full-SFT")
@@ -155,6 +159,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_seq_len', default=1024, type=int)
     parser.add_argument('--use_moe', default=False, type=bool)
     parser.add_argument("--data_path", type=str, default="../dataset/r1_mix_1024.jsonl")
+    parser.add_argument("--log_file", type=str, default="../out/train_distill_reason.log")
 
     args = parser.parse_args()
 
@@ -164,7 +169,8 @@ if __name__ == "__main__":
     os.makedirs(args.save_dir, exist_ok=True)
     os.makedirs(args.out_dir, exist_ok=True)
     tokens_per_iter = args.batch_size * args.max_seq_len
-    device_type = "cuda" if "cuda" in args.device else "cpu"
+    # device_type = "cuda" if "cuda" in args.device else "cpu"
+    device_type = args.device
 
     args.wandb_run_name = f"MiniMind-Distill-Reasoning-Epoch-{args.epochs}-BatchSize-{args.batch_size}-LearningRate-{args.learning_rate}"
 
@@ -210,6 +216,8 @@ if __name__ == "__main__":
     if ddp:
         model._ddp_params_and_buffers_to_ignore = {"pos_cis"}
         model = DistributedDataParallel(model, device_ids=[ddp_local_rank])
+
+    Logger("[DEBUG] 目前使用的训练设备为" + args.device)
 
     iter_per_epoch = len(train_loader)
     for epoch in range(args.epochs):
