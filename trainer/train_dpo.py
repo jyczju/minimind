@@ -130,7 +130,9 @@ def train_epoch(epoch, wandb):
             else:
                 state_dict = model.state_dict()
             state_dict = {k: v.half() for k, v in state_dict.items()}  # 半精度保存
-            torch.save(state_dict, ckp)
+            if not math.isnan(loss.item()):
+                torch.save(state_dict, ckp)
+                print(f'save model to {ckp}')
             model.train()
 
 
