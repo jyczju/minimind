@@ -80,6 +80,9 @@ def get_prompt_datas(args):
                     '我最近总是感到焦虑，应该怎么缓解？',
                     '如果有人突然晕倒，应该如何急救？'
                 ],
+                'lora_python_commit': [
+                    '请根据以下代码生成git commit：```+ import json```'
+                 ]
             }
             prompt_datas = lora_prompt_datas[args.lora_name]
 

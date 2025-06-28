@@ -2,6 +2,9 @@ import os
 import sys
 
 __package__ = "trainer"
+
+from sympy.codegen import Print
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import argparse
@@ -91,6 +94,7 @@ def train_epoch(epoch, wandb):
             os.makedirs(os.path.dirname(lora_save_path), exist_ok=True)
             # 【区别1】只保存lora权重即可
             save_lora(model, lora_save_path)
+            print(f'Save lora model to {lora_save_path}')
             model.train()
 
 
@@ -208,6 +212,7 @@ if __name__ == "__main__":
     )
 
     Logger("[DEBUG] 目前使用的训练设备为" + args.device)
+    Logger("[DEBUG] 目前使用的训练数据为" + args.data_path)
 
     scaler = torch.cuda.amp.GradScaler(enabled=(args.dtype in ['float16', 'bfloat16']))
     iter_per_epoch = len(train_loader)

@@ -22,30 +22,44 @@ def print_help(msg=None):
 
 
 def main():
-    args = argparse.Namespace(
-        lora_name='None',
-        out_dir='out',
-        temperature=0.85,
-        top_p=0.85,
-        device='cuda' if torch.cuda.is_available()  else 'mps' if torch.backends.mps.is_available() else 'cpu',
-        hidden_size=512,
-        num_hidden_layers=8,
-        max_seq_len=8192,
-        use_moe=False,
-        history_cnt=0,
-        load=1,
-        model_mode=2
-    )
+    parser = argparse.ArgumentParser(description="Chat with MiniMind")
+    parser.add_argument('--git_command', default="git diff master", type=str)
+    parser.add_argument('--lora_name', default='None', type=str)
+    parser.add_argument('--out_dir', default='out', type=str)
+    parser.add_argument('--temperature', default=0.85, type=float)
+    parser.add_argument('--top_p', default=0.85, type=float)
+    parser.add_argument('--device',
+                        default='cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu',
+                        type=str)
+    # 此处max_seq_len（最大输出长度）并不意味模型具有对应的长文本的性能，仅防止QA出现被截断的问题
+    # MiniMind2-moe (145M)：(hidden_size=640, num_hidden_layers=8, use_moe=True)
+    # MiniMind2-Small (26M)：(hidden_size=512, num_hidden_layers=8)
+    # MiniMind2 (104M)：(hidden_size=768, num_hidden_layers=16)
+    parser.add_argument('--hidden_size', default=512, type=int)
+    parser.add_argument('--num_hidden_layers', default=8, type=int)
+    parser.add_argument('--max_seq_len', default=8192, type=int)
+    parser.add_argument('--use_moe', default=False, type=bool)
+    # 携带历史对话上下文条数
+    # history_cnt需要设为偶数，即【用户问题, 模型回答】为1组；设置为0时，即当前query不携带历史上文
+    # 模型未经过外推微调时，在更长的上下文的chat_template时难免出现性能的明显退化，因此需要注意此处设置
+    parser.add_argument('--history_cnt', default=0, type=int)
+    parser.add_argument('--load', default=0, type=int, help="0: 原生torch权重，1: transformers加载")
+    parser.add_argument('--model_mode', default=1, type=int,
+                        help="0: 预训练模型，1: SFT-Chat模型，2: RLHF-Chat模型，3: Reason模型，4: RLAIF-Chat模型")
+    args = parser.parse_args()
     # print('[DEBUG] args: ', args)
     # print(f"[DEBUG] sys.argv: {sys.argv}")
     print("[DEBUG] 目前使用的推理设备为", args.device)
 
 
     # 读取命令行参数
-    cmd_arg = None
-    if len(sys.argv) > 1:
-        cmd_arg = sys.argv[1]
-        # print("[DEBUG] cmd_arg: ", cmd_arg)
+    if not args.git_command:
+        # 抛出异常
+        print_help("请输入git diff命令")
+        return 1
+
+    cmd_arg = args.git_command
+    print("[DEBUG] cmd_arg: ", cmd_arg)
 
     # 初始化模型和tokenizer
     model, tokenizer = init_model(args)
@@ -68,16 +82,8 @@ def main():
 
     # 构造 prompt
     # 提示词工程
-    prompt = f"""
-    你是一个git提交信息生成模型，你需要根据我提供的git差异内容生成3条提交信息。分点，用中文回答。例如：
-    1. 添加了何种功能
-    2. 修复了何种bug
-    3. 优化了何种性能
-    
-    请根据以下给定的git差异内容生成几条提交信息，可以参考用户的提示\"{user_prompt}\"：
-    ```{input_data}```
-    """
-    # print('[DEBUG] prompt: ', prompt)
+    prompt =     f"""你是一个git提交信息生成模型，你需要根据我提供的git差异内容生成提交信息，可以参考用户的提示\"{user_prompt}\"：```{input_data}```"""
+    print('[DEBUG] prompt: ', prompt)
 
     # 调用minimind本地模型
     try:
