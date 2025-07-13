@@ -1,3 +1,6 @@
+# 代码解读可以参考：https://zhuanlan.zhihu.com/p/1897324471251084756、https://github.com/hans0809/MiniMind-in-Depth/blob/main/src/8-LLM%E9%A2%84%E8%AE%AD%E7%BB%83%E6%B5%81%E7%A8%8B%E5%85%A8%E8%A7%A3.md
+# 训练流程可以参考：https://blog.csdn.net/m0_56255097/article/details/141686878
+
 import os
 import sys
 __package__ = "trainer"
